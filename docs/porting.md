@@ -1,127 +1,96 @@
-		<h1 style="text-align:center">How to Port Snes9x to a New Platform</h1>
-		<div style="text-align:right">
-			Version: 1.60<br>
-		</div>
-		<h2>Introduction</h2>
-		<p>
-			This is brief description of the steps to port Snes9x to the new platform. It describes what code you have to write and what functions exist that you can make use of. It also gives some insights as to how Snes9x actually works, although that will be subject of another document yet to be written.
-		</p>
-		<h2>System Requirements</h2>
-		<p>
-			A C++ compiler. For the most part Snes9x really isn't written in C++, it just uses the C++ compiler as a &ldquo;better C&rdquo; compiler to get inline functions and so on. GCC is good for compiling Snes9x (<a href="http://gcc.gnu.org/">http://gcc.gnu.org/</a>).
-		</p>
-		<p>
-			A fast CPU. SNES emulation is very compute intensive; two, or sometimes three CPUs to emulate, an 8-channel 16-bit stereo sound digital signal processor with real-time sample decompression, filter and echo effects, two custom graphics processor chips that can produce transparency, scaling, rotation and window effects in 32768 colors, and finally hardware DMA all take their toll on the host CPU.
-		</p>
-		<p>
-			Enough RAM. Snes9x uses 8MB to load SNES ROM images and several MB for emulating sound, graphics, custom chips, and so on.
-		</p>
-		<p>
-			A 16-bit color (two bytes per pixel) or deeper display, at least 512*478 pixels in resolution. Pixel format conversion may be required before you place the rendered SNES screen on to the display.
-		</p>
-		<p>
-			Snes9x outputs 16-bit stereo digital sound data. Ports may convert it from there to 8-bit or mono. Some ports can use interrupts or callbacks from the sound system to know when more sound data is required, most other ports have to periodically poll the host sound system to see if more data is required; if it is then the sound mixing code is called to fill the sound buffer with SNES sound data, which then can be passed on to the host sound system. Sound data is generated as an array of bytes (<code>uint8</code>) for 8-bit sound or shorts (<code>int16</code>) for 16-bit data. Stereo sound data generates twice as many samples, with each channel's samples interleaved, first left's then right's.
-		</p>
-		<p>
-			For the user to be able to control and play SNES games, some form of input device is required, a joypad or keyboard, for example. The real SNES can have 2 eight-button digital joypads connected to it or 5 joypads when an optional multi-player adaptor is connected, although most games only require a single joypad. Access to all eight buttons and the direction pad, of course, are usually required by most games. Snes9x does emulate the multi-player adaptor hardware, if you were wondering, but its still up to you to provide the emulation of the individual joypads.
-		</p>
-		<p>
-			The real SNES also has a SNES mouse, Super Scope and Justifier (light-gun) available as optional extras. Snes9x can emulate all of these using some form of pointing device, usually the host system's mouse.
-		</p>
-		<p>
-			Some SNES game cartridges contains a small amount of extra RAM and a battery, so ROMs could save a player's progress through a game for games that takes many hours to play from start to finish. Snes9x simulates this S-RAM by saving the contents of the area of memory occupied by the S-RAM into a file then automatically restoring it again the next time the user plays the same game. If the hardware you're porting to doesn't have a storage media available then you could be in trouble.
-		</p>
-		<p>
-			Snes9x also implements freeze-game files which can record the state of the SNES hardware and RAM at a particular point in time and can restore it to that exact state at a later date - the result is that users can save a game at any point, not just at save-game or password points provided by the original game coders. Each freeze file is over 400k in size. To help save disk space, Snes9x can be compiled with zlib (<a href="http://www.zlib.net/">http://www.zlib.net/</a>), which is used to GZIP compress the freeze files, reducing the size to typically below 100k. zlib is also used to load GZIP or ZIP compressed ROM images. Additionally, Snes9x supports JMA archives compressed with NSRT (<a href="http://nsrt.edgeemu.com/">http://nsrt.edgeemu.com/</a>).
-		</p>
-		<h2>Compile-Time Options</h2>
-		<h3><code>DEBUGGER</code></h3>
-		<p>
-			Enables extra code to assist you in debugging SNES ROMs. The debugger has only ever been a quick-hack and user-interface to debugger facilities is virtually non-existent. Most of the debugger information is output via stdout and enabling the debugger slows the whole emulator down slightly. However, the debugger options available are very powerful; you could use it to help get your port working. You probably still want to ship the finished version with the debugger disabled, it will only confuse non-technical users.
-		</p>
-		<h3><code>RIGHTSHIFT_IS_SAR</code></h3>
-		<p>
-			Define this if your compiler uses shift right arithmetic for signed values. For example, GCC and Visual C++ use shift right arithmetic.
-		</p>
-		<h3><code>ZLIB / UNZIP_SUPPORT / JMA_SUPPORT</code></h3>
-		<p>
-			Define these if you want to support GZIP/ZIP/JMA compressed ROM images and GZIP compressed freeze-game files.
-		</p>
-		<h3><code>USE_OPENGL</code></h3>
-		<p>
-			Define this and set <code>Settings.OpenGLEnable</code> to <code>true</code>, then you'll get the rendered SNES image as one OpenGL texture.
-		</p>
-		<h3>Typical Options Common for Most Platforms</h3>
-		<p><code>
-			ZLIB<br>
-			UNZIP_SUPPORT<br>
-			JMA_SUPPORT<br>
-			RIGHTSHIFT_IS_SAR<br>
-		</code></p>
-		<h2>Editing port.h</h2>
-		<p>
-			You may need to edit <code>port.h</code> to fit Snes9x to your system.
-		</p>
-		<p>
-			If the byte ordering of your system is least significant byte first, make sure <code>LSB_FIRST</code> is defined, otherwise make sure it's not defined.
-		</p>
-		<p>
-			You'll need to make sure what pixel format your system uses for 16-bit colors (<code>RGB565</code>, <code>RGB555</code>, <code>BGR565</code> or <code>BGR555</code>), and if it's not <code>RGB565</code>, define <code>PIXEL_FORMAT</code> to it so that Snes9x will use it to render the SNES screen. For example, Windows uses <code>RGB565</code>, Mac OS X uses <code>RGB555</code>. If your system supports more than one pixel format, you can define <code>GFX_MULTI_FORMAT</code> and change Snes9x's pixel format dynamically by calling <code>S9xSetRenderPixelFormat</code> function. If your system is 24 or 32-bit only, then don't define anything; instead write a conversion routine that will take a complete rendered 16-bit SNES screen in <code>RGB565</code> format and convert to the format required to be displayed on your system.
-		</p>
-		<p>
-			<code>port.h</code> also typedefs some types; <code>uint8</code> for an unsigned 8-bit quantity, <code>uint16</code> for an unsigned 16-bit quantity, <code>uint32</code> for a 32-bit unsigned quantity and <code>bool8</code> for a <code>true</code>/<code>false</code> type. Signed versions are also typedef'ed.
-		</p>
-		<h2>Controllers Management</h2>
-		<p>
-			Read <code>controls.h</code>, <code>crosshair.h</code>, <code>controls.txt</code> and <code>control-inputs.txt</code> for details. This section is the minimal explanation to get the SNES controls workable.
-		</p>
-		<p>
-			The real SNES allows several different types of devices to be plugged into the game controller ports. The devices Snes9x emulates are a joypad, multi-player adaptor known as the Multi Player 5 or Multi Tap (allowing a further 4 joypads to be plugged in), a 2-button mouse, a light gun known as the Super Scope, and a light gun known as the Justifier.
-		</p>
-		<p>
-			In your initialization code, call <code>S9xUnmapAllControl</code> function.
-		</p>
-		<p>
-			Map any IDs to each SNES controller's buttons and pointers. (ID 249-255 are reserved).
-		</p>
-		<p>
-			Typically, use <code>S9xMapPointer</code> function for the pointer of the SNES mouse, Super Scope and Justifier, <code>S9xMapButton</code> function for other buttons. Set <code>poll</code> to <code>false</code> for the joypad buttons, <code>true</code> for the other buttons and pointers.
-		</p>
-		<p>
-			<code>S9xMapButton(k1P_A_Button, s9xcommand_t cmd = S9xGetCommandT(&quot;Joypad1 A&quot;), false);</code>
-		</p>
-		<p>
-			In your main emulation loop, before <code>S9xMainLoop</code> function is called, check your system's keyboard/joypad, and call <code>S9xReportButton</code> function to report the states of the SNES joypad buttons to Snes9x. Checking and reporting input immediately before <code>S9xMainLoop</code> is preferred to minimize input latency.
-		</p>
-		<p>
-			<code>void MyMainLoop (void)<br>
-			{<br>
-			&nbsp;&nbsp;&nbsp;&nbsp;MyReportButttons();<br>
-			&nbsp;&nbsp;&nbsp;&nbsp;S9xMainLoop();<br>
-			}</code>
-		</p>
-		<p>
-			<code>void MyReportButtons (void)<br>
-			{<br>
-			&nbsp;&nbsp;&nbsp;&nbsp;S9xReportButton(k1P_A_Button, (key_is_pressed ? true : false));<br>
-			}</code>
-		</p>
-		<p>
-			Prepare your <code>S9xPollButton</code> and <code>S9xPollPointer</code> function to reply Snes9x's request for other buttons/cursors states.
-		</p>
-		<p>
-			Call <code>S9xSetController</code> function. It connects each input device to each SNES input port.<br>
-			Here's typical controller settings that is used by the real SNES games:
-		</p>
-		<p>Joypad<br>
-			<code>S9xSetController(0, CTL_JOYPAD, 0, 0, 0, 0);<br>
-			S9xSetController(1, CTL_JOYPAD, 1, 0, 0, 0);</code>
-		</p>
-		<p>Mouse (port 1)<br>
-			<code>S9xSetController(0, CTL_MOUSE,  0, 0, 0, 0);<br>
-			S9xSetController(1, CTL_JOYPAD, 1, 0, 0, 0);</code>
-		</p>
-		<p>Mouse (port 2)<br>
+# How to Port Snes9x to a New Platform
+			Version: 1.60
+## Introduction
+This is brief description of the steps to port Snes9x to the new platform. It describes what code you have to write and what functions exist that you can make use of. It also gives some insights as to how Snes9x actually works, although that will be subject of another document yet to be written.
+
+## System Requirements
+A C++ compiler. For the most part Snes9x really isn't written in C++, it just uses the C++ compiler as a "better C compiler" to get inline functions and so on. GCC is good for compiling Snes9x (<a href="http://gcc.gnu.org/">http://gcc.gnu.org/</a>).
+
+A fast CPU. SNES emulation is very compute intensive; two, or sometimes three CPUs to emulate, an 8-channel 16-bit stereo sound digital signal processor with real-time sample decompression, filter and echo effects, two custom graphics processor chips that can produce transparency, scaling, rotation and window effects in 32768 colors, and finally hardware DMA all take their toll on the host CPU.
+
+Enough RAM. Snes9x uses 8MB to load SNES ROM images and several MB for emulating sound, graphics, custom chips, and so on.
+
+A 16-bit color (two bytes per pixel) or deeper display, at least 512x478px in resolution. Pixel format conversion may be required before you place the rendered SNES screen on to the display.
+
+Snes9x outputs 16-bit stereo digital sound data. Ports may convert it from there to 8-bit or mono. Some ports can use interrupts or callbacks from the sound system to know when more sound data is required, most other ports have to periodically poll the host sound system to see if more data is required; if it is then the sound mixing code is called to fill the sound buffer with SNES sound data, which then can be passed on to the host sound system. Sound data is generated as an array of bytes (<code>uint8</code>) for 8-bit sound or shorts (<code>int16</code>) for 16-bit data. Stereo sound data generates twice as many samples, with each channel's samples interleaved, first left's then right's.
+
+For the user to be able to control and play SNES games, some form of input device is required, a joypad or keyboard, for example. The real SNES can have 2 eight-button digital joypads connected to it or 5 joypads when an optional multi-player adaptor is connected, although most games only require a single joypad. Access to all eight buttons and the direction pad, of course, are usually required by most games. Snes9x does emulate the multi-player adaptor hardware, if you were wondering, but its still up to you to provide the emulation of the individual joypads.
+
+The real SNES also has a SNES mouse, Super Scope and Justifier (light-gun) available as optional extras. Snes9x can emulate all of these using some form of pointing device, usually the host system's mouse.
+
+Some SNES game cartridges contains a small amount of extra RAM and a battery, so ROMs could save a player's progress through a game for games that takes many hours to play from start to finish. Snes9x simulates this S-RAM by saving the contents of the area of memory occupied by the S-RAM into a file then automatically restoring it again the next time the user plays the same game. If the hardware you're porting to doesn't have a storage media available then you could be in trouble.
+
+Snes9x also implements freeze-game files which can record the state of the SNES hardware and RAM at a particular point in time and can restore it to that exact state at a later date - the result is that users can save a game at any point, not just at save-game or password points provided by the original game coders. Each freeze file is over 400k in size. To help save disk space, Snes9x can be compiled with zlib (<a href="http://www.zlib.net/">http://www.zlib.net/</a>), which is used to GZIP compress the freeze files, reducing the size to typically below 100k. zlib is also used to load GZIP or ZIP compressed ROM images. Additionally, Snes9x supports JMA archives compressed with NSRT (<a href="http://nsrt.edgeemu.com/">http://nsrt.edgeemu.com/</a>).
+
+## Compile-Time Options
+### <code>DEBUGGER</code>
+Enables extra code to assist you in debugging SNES ROMs. The debugger has only ever been a quick-hack and user-interface to debugger facilities is virtually non-existent. Most of the debugger information is output via stdout and enabling the debugger slows the whole emulator down slightly. However, the debugger options available are very powerful; you could use it to help get your port working. You probably still want to ship the finished version with the debugger disabled, it will only confuse non-technical users.
+
+### <code>RIGHTSHIFT_IS_SAR</code>
+Define this if your compiler uses shift right arithmetic for signed values. For example, GCC and Visual C++ use shift right arithmetic.
+### <code>ZLIB / UNZIP_SUPPORT / JMA_SUPPORT</code>
+Define these if you want to support GZIP/ZIP/JMA compressed ROM images and GZIP compressed freeze-game files.
+
+### <code>USE_OPENGL</code>
+Define this and set <code>Settings.OpenGLEnable</code> to <code>true</code>, then you'll get the rendered SNES image as one OpenGL texture.
+
+### Typical Options Common for Most Platforms
+<code>
+ZLIB<br>
+UNZIP_SUPPORT<br>
+JMA_SUPPORT<br>
+RIGHTSHIFT_IS_SAR<br>
+</code>
+## Editing port.h
+You may need to edit <code>port.h</code> to fit Snes9x to your system.
+
+If the byte ordering of your system is least significant byte first, make sure <code>LSB_FIRST</code> is defined, otherwise make sure it's not defined.
+
+You'll need to make sure what pixel format your system uses for 16-bit colors (<code>RGB565</code>, <code>RGB555</code>, <code>BGR565</code> or <code>BGR555</code>), and if it's not <code>RGB565</code>, define <code>PIXEL_FORMAT</code> to it so that Snes9x will use it to render the SNES screen. For example, Windows uses <code>RGB565</code>, Mac OS X uses <code>RGB555</code>. If your system supports more than one pixel format, you can define <code>GFX_MULTI_FORMAT</code> and change Snes9x's pixel format dynamically by calling <code>S9xSetRenderPixelFormat</code> function. If your system is 24 or 32-bit only, then don't define anything; instead write a conversion routine that will take a complete rendered 16-bit SNES screen in <code>RGB565</code> format and convert to the format required to be displayed on your system.
+
+<code>port.h</code> also typedefs some types; <code>uint8</code> for an unsigned 8-bit quantity, <code>uint16</code> for an unsigned 16-bit quantity, <code>uint32</code> for a 32-bit unsigned quantity and <code>bool8</code> for a <code>true</code>/<code>false</code> type. Signed versions are also typedef'ed.
+
+## Controllers Management
+Read <code>controls.h</code>, <code>crosshair.h</code>, <code>controls.txt</code> and <code>control-inputs.txt</code> for details. This section is the minimal explanation to get the SNES controls workable.
+
+The real SNES allows several different types of devices to be plugged into the game controller ports. The devices Snes9x emulates are a joypad, multi-player adaptor known as the Multi Player 5 or Multi Tap (allowing a further 4 joypads to be plugged in), a 2-button mouse, a light gun known as the Super Scope, and a light gun known as the Justifier.
+
+In your initialization code, call <code>S9xUnmapAllControl</code> function.
+
+Map any IDs to each SNES controller's buttons and pointers. (ID 249-255 are reserved).
+
+Typically, use <code>S9xMapPointer</code> function for the pointer of the SNES mouse, Super Scope and Justifier, <code>S9xMapButton</code> function for other buttons. Set <code>poll</code> to <code>false</code> for the joypad buttons, <code>true</code> for the other buttons and pointers.
+
+<code>S9xMapButton(k1P_A_Button, s9xcommand_t cmd = S9xGetCommandT(&quot;Joypad1 A&quot;), false);</code>
+
+In your main emulation loop, before <code>S9xMainLoop</code> function is called, check your system's keyboard/joypad, and call <code>S9xReportButton</code> function to report the states of the SNES joypad buttons to Snes9x. Checking and reporting input immediately before <code>S9xMainLoop</code> is preferred to minimize input latency.
+
+```
+void MyMainLoop (void) {
+	MyReportButttons();
+	S9xMainLoop();
+}
+
+void MyReportButtons (void) {
+	S9xReportButton(k1P_A_Button, (key_is_pressed ? true : false));
+}
+```
+Prepare your <code>S9xPollButton</code> and <code>S9xPollPointer</code> function to reply Snes9x's request for other buttons/cursors states.
+
+Call <code>S9xSetController</code> function. It connects each input device to each SNES input port.
+Here's typical controller settings that is used by the real SNES games:
+
+Joypad
+```
+S9xSetController(0, CTL_JOYPAD, 0, 0, 0, 0);
+S9xSetController(1, CTL_JOYPAD, 1, 0, 0, 0);
+```
+Mouse (port 1)
+```
+S9xSetController(0, CTL_MOUSE,  0, 0, 0, 0);
+S9xSetController(1, CTL_JOYPAD, 1, 0, 0, 0);
+```
+Mouse (port 2)<br>
 			<code>S9xSetController(0, CTL_JOYPAD, 0, 0, 0, 0);<br>
 			S9xSetController(1, CTL_MOUSE, 1, 0, 0, 0);</code>
 		</p>
